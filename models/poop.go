@@ -15,30 +15,6 @@ type Poop struct {
 	Tags         []string  `json:"tags,omitempty"`
 	Notes        string    `json:"notes,omitempty"`
 	Timestamp    time.Time `json:"timestamp"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-func NewPoop(userID string, bristolScale, urgency int, notes string, tags []string) *Poop {
-	now := time.Now()
-
-	// Validate urgency (1-10)
-	if urgency < 1 || urgency > 10 {
-		urgency = 5 // Default to middle value if invalid
-	}
-
-	// Validate and clean tags
-	validatedTags := validateTags(tags)
-
-	return &Poop{
-		ID:           uuid.New().String(),
-		UserID:       userID,
-		BristolScale: bristolScale,
-		Urgency:      urgency,
-		Tags:         validatedTags,
-		Notes:        notes,
-		Timestamp:    now,
-		CreatedAt:    now,
-	}
 }
 
 func NewPoopWithDateTime(userID string, bristolScale, urgency int, notes, datetimeStr string, tags []string) *Poop {
@@ -67,7 +43,6 @@ func NewPoopWithDateTime(userID string, bristolScale, urgency int, notes, dateti
 		Tags:         validatedTags,
 		Notes:        notes,
 		Timestamp:    timestamp,
-		CreatedAt:    now,
 	}
 }
 

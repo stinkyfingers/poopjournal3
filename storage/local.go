@@ -56,7 +56,7 @@ func (l *LocalStorage) SaveFood(ctx context.Context, food *models.Food) error {
 	defer writer.Flush()
 
 	if needHeader {
-		header := []string{"id", "user_id", "name", "description", "tags", "timestamp", "created_at"}
+		header := []string{"id", "user_id", "name", "description", "tags", "timestamp"}
 		if err := writer.Write(header); err != nil {
 			return fmt.Errorf("failed to write header: %w", err)
 		}
@@ -75,7 +75,6 @@ func (l *LocalStorage) SaveFood(ctx context.Context, food *models.Food) error {
 		food.Description,
 		tagsStr,
 		food.Timestamp.Format(time.RFC3339),
-		food.CreatedAt.Format(time.RFC3339),
 	}
 
 	return writer.Write(record)
@@ -114,19 +113,16 @@ func (l *LocalStorage) ListFood(ctx context.Context, userID string) ([]*models.F
 		// Handle tags for new format
 		var tags []string
 		timestampIndex := 4
-		createdAtIndex := 5
 
 		if len(record) >= 7 {
-			// New format: id, user_email, name, description, tags, timestamp, created_at
+			// New format: id, user_email, name, description, tags, timestamp
 			if record[4] != "" {
 				tags = strings.Split(record[4], ";")
 			}
 			timestampIndex = 5
-			createdAtIndex = 6
 		}
 
 		timestamp, _ := time.Parse(time.RFC3339, record[timestampIndex])
-		createdAt, _ := time.Parse(time.RFC3339, record[createdAtIndex])
 
 		food := &models.Food{
 			ID:          record[0],
@@ -135,7 +131,6 @@ func (l *LocalStorage) ListFood(ctx context.Context, userID string) ([]*models.F
 			Description: record[3],
 			Tags:        tags,
 			Timestamp:   timestamp,
-			CreatedAt:   createdAt,
 		}
 		foods = append(foods, food)
 	}
@@ -202,7 +197,7 @@ func (l *LocalStorage) rewriteFoodFile(userID string, foods []*models.Food) erro
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"id", "user_id", "name", "description", "tags", "timestamp", "created_at"}
+	header := []string{"id", "user_id", "name", "description", "tags", "timestamp"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -222,7 +217,6 @@ func (l *LocalStorage) rewriteFoodFile(userID string, foods []*models.Food) erro
 			food.Description,
 			tagsStr,
 			food.Timestamp.Format(time.RFC3339),
-			food.CreatedAt.Format(time.RFC3339),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write food record: %w", err)
@@ -256,7 +250,7 @@ func (l *LocalStorage) SavePoop(ctx context.Context, poop *models.Poop) error {
 	defer writer.Flush()
 
 	if needHeader {
-		header := []string{"id", "user_id", "bristol_scale", "urgency", "tags", "notes", "timestamp", "created_at"}
+		header := []string{"id", "user_id", "bristol_scale", "urgency", "tags", "notes", "timestamp"}
 		if err := writer.Write(header); err != nil {
 			return fmt.Errorf("failed to write header: %w", err)
 		}
@@ -276,7 +270,6 @@ func (l *LocalStorage) SavePoop(ctx context.Context, poop *models.Poop) error {
 		tagsStr,
 		poop.Notes,
 		poop.Timestamp.Format(time.RFC3339),
-		poop.CreatedAt.Format(time.RFC3339),
 	}
 
 	return writer.Write(record)
@@ -319,21 +312,18 @@ func (l *LocalStorage) ListPoop(ctx context.Context, userID string) ([]*models.P
 		var tags []string
 		notesIndex := 3
 		timestampIndex := 4
-		createdAtIndex := 5
 
 		if len(record) >= 8 {
-			// New format: id, user_email, bristol_scale, urgency, tags, notes, timestamp, created_at
+			// New format: id, user_email, bristol_scale, urgency, tags, notes, timestamp
 			urgency, _ = strconv.Atoi(record[3])
 			if record[4] != "" {
 				tags = strings.Split(record[4], ";")
 			}
 			notesIndex = 5
 			timestampIndex = 6
-			createdAtIndex = 7
 		}
 
 		timestamp, _ := time.Parse(time.RFC3339, record[timestampIndex])
-		createdAt, _ := time.Parse(time.RFC3339, record[createdAtIndex])
 
 		poop := &models.Poop{
 			ID:           record[0],
@@ -343,7 +333,6 @@ func (l *LocalStorage) ListPoop(ctx context.Context, userID string) ([]*models.P
 			Tags:         tags,
 			Notes:        record[notesIndex],
 			Timestamp:    timestamp,
-			CreatedAt:    createdAt,
 		}
 		poops = append(poops, poop)
 	}
@@ -410,7 +399,7 @@ func (l *LocalStorage) rewritePoopFile(userID string, poops []*models.Poop) erro
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"id", "user_id", "bristol_scale", "urgency", "tags", "notes", "timestamp", "created_at"}
+	header := []string{"id", "user_id", "bristol_scale", "urgency", "tags", "notes", "timestamp"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -431,7 +420,6 @@ func (l *LocalStorage) rewritePoopFile(userID string, poops []*models.Poop) erro
 			tagsStr,
 			poop.Notes,
 			poop.Timestamp.Format(time.RFC3339),
-			poop.CreatedAt.Format(time.RFC3339),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write poop record: %w", err)

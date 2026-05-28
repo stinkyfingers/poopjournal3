@@ -97,7 +97,6 @@ func (s *S3Storage) ListFood(ctx context.Context, userID string) ([]*models.Food
 		}
 
 		timestamp, _ := time.Parse(time.RFC3339, record[4])
-		createdAt, _ := time.Parse(time.RFC3339, record[5])
 
 		food := &models.Food{
 			ID:          record[0],
@@ -105,7 +104,6 @@ func (s *S3Storage) ListFood(ctx context.Context, userID string) ([]*models.Food
 			Name:        record[2],
 			Description: record[3],
 			Timestamp:   timestamp,
-			CreatedAt:   createdAt,
 		}
 		foods = append(foods, food)
 	}
@@ -178,7 +176,6 @@ func (s *S3Storage) writeFoodFile(ctx context.Context, key string, foods []*mode
 			food.Name,
 			food.Description,
 			food.Timestamp.Format(time.RFC3339),
-			food.CreatedAt.Format(time.RFC3339),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write food record: %w", err)
@@ -254,7 +251,6 @@ func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop
 
 		bristolScale, _ := strconv.Atoi(record[2])
 		timestamp, _ := time.Parse(time.RFC3339, record[4])
-		createdAt, _ := time.Parse(time.RFC3339, record[5])
 
 		poop := &models.Poop{
 			ID:           record[0],
@@ -262,7 +258,6 @@ func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop
 			BristolScale: bristolScale,
 			Notes:        record[3],
 			Timestamp:    timestamp,
-			CreatedAt:    createdAt,
 		}
 		poops = append(poops, poop)
 	}
@@ -335,7 +330,6 @@ func (s *S3Storage) writePoopFile(ctx context.Context, key string, poops []*mode
 			strconv.Itoa(poop.BristolScale),
 			poop.Notes,
 			poop.Timestamp.Format(time.RFC3339),
-			poop.CreatedAt.Format(time.RFC3339),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write poop record: %w", err)

@@ -13,24 +13,6 @@ type Food struct {
 	Description string    `json:"description,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
 	Timestamp   time.Time `json:"timestamp"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-func NewFood(userID, name, description string, tags []string) *Food {
-	now := time.Now()
-
-	// Validate and clean tags using the same validation as poop
-	validatedTags := validateTags(tags)
-
-	return &Food{
-		ID:          uuid.New().String(),
-		UserID:      userID,
-		Name:        name,
-		Description: description,
-		Tags:        validatedTags,
-		Timestamp:   now,
-		CreatedAt:   now,
-	}
 }
 
 func NewFoodWithDateTime(userID, name, description, datetimeStr string, tags []string) *Food {
@@ -53,6 +35,5 @@ func NewFoodWithDateTime(userID, name, description, datetimeStr string, tags []s
 		Description: description,
 		Tags:        validatedTags,
 		Timestamp:   timestamp,
-		CreatedAt:   now,
 	}
 }

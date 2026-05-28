@@ -2,13 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/stinkyfingers/poopjournal/auth"
 	"github.com/stinkyfingers/poopjournal/models"
 	"github.com/stinkyfingers/poopjournal/storage"
@@ -27,13 +25,6 @@ func NewFoodHandler(storage storage.Storage) *FoodHandler {
 type foodPageResponse struct {
 	Foods        []*models.Food `json:"foods"`
 	ExistingTags []string       `json:"existing_tags"`
-}
-
-type foodMutationRequest struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	DateTime    string   `json:"datetime"`
-	Tags        []string `json:"tags"`
 }
 
 type deleteResponse struct {
@@ -76,25 +67,27 @@ func (h *FoodHandler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := parseFoodMutationRequest(r)
+	var food *models.Food
+	err := json.NewDecoder(r.Body).Decode(&food)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "failed to decode JSON body: "+err.Error())
 		return
 	}
 
-	if req.Name == "" {
+	if food.Name == "" {
 		writeError(w, http.StatusBadRequest, "food name is required")
 		return
 	}
 
-	if req.DateTime == "" {
+	if food.Timestamp.IsZero() {
 		writeError(w, http.StatusBadRequest, "date and time is required")
 		return
 	}
-
-	food := models.NewFoodWithDateTime(userId, req.Name, req.Description, req.DateTime, req.Tags)
+	food.ID = uuid.New().String()
+	food.UserID = userId
+	food.Tags = normalizeTags(food.Tags)
 	if err := h.storage.SaveFood(r.Context(), food); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save food entry")
+		writeError(w, http.StatusInternalServerError, "failed to add food entry")
 		return
 	}
 
@@ -113,54 +106,27 @@ func (h *FoodHandler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/food/")
-	foodID := strings.Split(path, "/")[0]
-
-	req, err := parseFoodMutationRequest(r)
+	var food *models.Food
+	err := json.NewDecoder(r.Body).Decode(&food)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "failed to decode JSON body: "+err.Error())
 		return
 	}
-
-	if req.Name == "" {
+	if food.ID == "" {
+		writeError(w, http.StatusBadRequest, "food ID is required for update")
+		return
+	}
+	if food.Name == "" {
 		writeError(w, http.StatusBadRequest, "food name is required")
 		return
 	}
 
-	if req.DateTime == "" {
+	if food.Timestamp.IsZero() {
 		writeError(w, http.StatusBadRequest, "date and time is required")
 		return
 	}
-
-	foods, err := h.storage.ListFood(r.Context(), userId)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get food entries")
-		return
-	}
-
-	var food *models.Food
-	for _, f := range foods {
-		if f.ID == foodID {
-			food = f
-			break
-		}
-	}
-
-	if food == nil {
-		writeError(w, http.StatusNotFound, "food entry not found")
-		return
-	}
-
-	timestamp, err := time.Parse("2006-01-02T15:04", req.DateTime)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid date and time format")
-		return
-	}
-
-	food.Name = req.Name
-	food.Description = req.Description
-	food.Timestamp = timestamp
-	food.Tags = normalizeTags(req.Tags)
+	food.UserID = userId
+	food.Tags = normalizeTags(food.Tags)
 
 	if err := h.storage.UpdateFood(r.Context(), food); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update food entry")
@@ -182,8 +148,11 @@ func (h *FoodHandler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/food/")
-	foodID := strings.Split(path, "/")[0]
+	foodID := r.URL.Query().Get("id")
+	if foodID == "" {
+		writeError(w, http.StatusBadRequest, "food ID is required for deletion")
+		return
+	}
 
 	if err := h.storage.DeleteFood(r.Context(), userId, foodID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete food entry")
@@ -191,37 +160,6 @@ func (h *FoodHandler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, deleteResponse{Deleted: true, ID: foodID})
-}
-
-func parseFoodMutationRequest(r *http.Request) (*foodMutationRequest, error) {
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		defer r.Body.Close()
-
-		var req foodMutationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil, errors.New("request body is required")
-			}
-			return nil, errors.New("failed to decode JSON body")
-		}
-
-		req.Name = strings.TrimSpace(req.Name)
-		req.Description = strings.TrimSpace(req.Description)
-		req.DateTime = strings.TrimSpace(req.DateTime)
-		req.Tags = normalizeTags(req.Tags)
-		return &req, nil
-	}
-
-	if err := r.ParseForm(); err != nil {
-		return nil, errors.New("failed to parse form body")
-	}
-
-	return &foodMutationRequest{
-		Name:        strings.TrimSpace(r.FormValue("name")),
-		Description: strings.TrimSpace(r.FormValue("description")),
-		DateTime:    strings.TrimSpace(r.FormValue("datetime")),
-		Tags:        normalizeTags(strings.Split(strings.TrimSpace(r.FormValue("tags")), ",")),
-	}, nil
 }
 
 func normalizeTags(tags []string) []string {
