@@ -41,13 +41,13 @@ func (h *FoodHandler) ListFoodHandler(w http.ResponseWriter, r *http.Request) {
 
 	foods, err := h.storage.ListFood(r.Context(), userId)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get food entries")
+		writeError(w, http.StatusInternalServerError, "failed to get food entries: "+err.Error())
 		return
 	}
 
 	existingTags, err := h.storage.GetAllFoodTags(r.Context(), userId)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get existing tags")
+		writeError(w, http.StatusInternalServerError, "failed to get existing tags: "+err.Error())
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *FoodHandler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
 	food.UserID = userId
 	food.Tags = normalizeTags(food.Tags)
 	if err := h.storage.SaveFood(r.Context(), food); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to add food entry")
+		writeError(w, http.StatusInternalServerError, "failed to add food entry: "+err.Error())
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *FoodHandler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) 
 	food.Tags = normalizeTags(food.Tags)
 
 	if err := h.storage.UpdateFood(r.Context(), food); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update food entry")
+		writeError(w, http.StatusInternalServerError, "failed to update food entry: "+err.Error())
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *FoodHandler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.storage.DeleteFood(r.Context(), userId, foodID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete food entry")
+		writeError(w, http.StatusInternalServerError, "failed to delete food entry: "+err.Error())
 		return
 	}
 

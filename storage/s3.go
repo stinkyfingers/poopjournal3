@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,7 +93,8 @@ func (s *S3Storage) ListFood(ctx context.Context, userID string) ([]*models.Food
 
 	foods := make([]*models.Food, 0, len(records)-1)
 	for _, record := range records[1:] { // Skip header
-		if len(record) < 6 {
+		if len(record) != 5 {
+			log.Printf("expected 5 fields in food.csv record, found %d in record %+v", len(record), record)
 			continue
 		}
 
@@ -163,7 +165,7 @@ func (s *S3Storage) writeFoodFile(ctx context.Context, key string, foods []*mode
 	writer := csv.NewWriter(&buf)
 
 	// Write header
-	header := []string{"id", "user_id", "name", "description", "timestamp", "created_at"}
+	header := []string{"id", "user_id", "name", "description", "timestamp"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -231,7 +233,6 @@ func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop
 		return nil, fmt.Errorf("failed to get poop file from S3: %w", err)
 	}
 	defer result.Body.Close()
-
 	// Read and parse CSV
 	reader := csv.NewReader(result.Body)
 	records, err := reader.ReadAll()
@@ -245,7 +246,8 @@ func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop
 
 	poops := make([]*models.Poop, 0, len(records)-1)
 	for _, record := range records[1:] { // Skip header
-		if len(record) < 6 {
+		if len(record) != 5 {
+			log.Printf("expected 5 fields in poop.csv record, found %d in record %+v", len(record), record)
 			continue
 		}
 
@@ -317,7 +319,7 @@ func (s *S3Storage) writePoopFile(ctx context.Context, key string, poops []*mode
 	writer := csv.NewWriter(&buf)
 
 	// Write header
-	header := []string{"id", "user_id", "bristol_scale", "notes", "timestamp", "created_at"}
+	header := []string{"id", "user_id", "bristol_scale", "notes", "timestamp"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}

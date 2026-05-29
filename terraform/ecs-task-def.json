@@ -1,34 +1,21 @@
 [
   {
-    "family": "poopjournal-api",
-    "networkMode": "awsvpc",
-    "cpu": 256,
-    "memory": 512,
-    "requiresCompatibilities": ["FARGATE"],
-    "runtimePlatform": {
-      "cpuArchitecture": "ARM64",
-      "operatingSystemFamily": "LINUX"
-    },
-    "containerDefinitions": [
-      {
-        "name": "poopjournal-api",
-        "image": "<REPLACE_WITH_IMAGE_URI>",
-        "portMappings": [
-          { "containerPort": 8080, "protocol": "tcp" }
-        ],
-        "environment": [
-          { "name": "S3_BUCKET", "value": "${S3_BUCKET}" }
-        ],
-        "essential": true,
-        "logConfiguration": {
-          "logDriver": "awslogs",
-          "options": {
-            "awslogs-group": "/ecs/poopjournal-api",
-            "awslogs-region": "${AWS_REGION}",
-            "awslogs-stream-prefix": "ecs"
-          }
-        }
+    "name": "poopjournal-api",
+    "image": "671958020402.dkr.ecr.us-west-1.amazonaws.com/poopjournal:latest",
+    "portMappings": [
+      { "containerPort": 8080, "protocol": "tcp" }
+    ],
+    "environment": [
+      { "name": "S3_BUCKET", "value": "poopjournal-data-prod" }
+    ],
+    "essential": true,
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/poopjournal-api",
+        "awslogs-region": "us-west-1",
+        "awslogs-stream-prefix": "ecs"
       }
-    ]
+    }
   }
 ]

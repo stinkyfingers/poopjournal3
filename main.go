@@ -1,31 +1,41 @@
-//go:build lambda
-
 package main
 
 import (
-	"context"
 	"log"
+	"net/http"
 	"os"
-
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
 	"github.com/stinkyfingers/poopjournal/server"
 	"github.com/stinkyfingers/poopjournal/storage"
+
+	"github.com/joho/godotenv"
 )
 
-var httpLambda *httpadapter.HandlerAdapter
+func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+	}
 
-func init() {
-	os.Setenv("STORAGE_TYPE", "s3")
-
-	// Initialize storage
+	// Initialize storage based on environment
 	var store storage.Storage
 	var err error
 
 	storageType := os.Getenv("STORAGE_TYPE")
+	if storageType == "" {
+		storageType = "local"
+	}
+
 	switch storageType {
+	case "local":
+		dataDir := os.Getenv("DATA_DIR")
+		if dataDir == "" {
+			dataDir = "./data"
+		}
+		store, err = storage.NewLocalStorage(dataDir)
+		if err != nil {
+			log.Fatal("Failed to initialize local storage:", err)
+		}
+		log.Printf("Using local storage with data directory: %s", dataDir)
 	case "s3":
 		bucketName := os.Getenv("S3_BUCKET")
 		if bucketName == "" {
@@ -37,16 +47,8 @@ func init() {
 			log.Fatal("Failed to initialize S3 storage:", err)
 		}
 		log.Printf("Using S3 storage with bucket: %s", bucketName)
-	case "local":
-		// Fallback to local for testing
-		dataDir := "/tmp/poopjournal-data"
-		store, err = storage.NewLocalStorage(dataDir)
-		if err != nil {
-			log.Fatal("Failed to initialize local storage:", err)
-		}
-		log.Printf("Using local storage with data directory: %s", dataDir)
 	default:
-		log.Fatal("Invalid storage type for Lambda. Use 's3' or 'local'")
+		log.Fatal("Invalid storage type. Use 'local' or 's3'")
 	}
 
 	srv, err := server.New(store)
@@ -58,13 +60,18 @@ func init() {
 
 	// Wrap with CORS middleware
 	handler := server.CorsMiddleware(mux)
-	httpLambda = httpadapter.New(handler)
-}
 
-func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	return httpLambda.ProxyWithContext(ctx, req)
-}
+	// Get port from environment
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8070"
+	}
 
-func main() {
-	lambda.Start(Handler)
+	// Start server
+	log.Printf("Server starting on port %s", port)
+	log.Printf("Visit http://localhost:%s to access the application", port)
+
+	if err := http.ListenAndServe(":"+port, handler); err != nil {
+		log.Fatal("Server failed to start:", err)
+	}
 }

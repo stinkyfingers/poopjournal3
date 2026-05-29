@@ -13,10 +13,15 @@ variable "domain_name" {
   type        = string
   default     = "api.poopjournal.com"
 }
+variable "hosted_zone_name" {
+  description = "The Route53 hosted zone name (e.g. example.com)"
+  type        = string
+  default     = "poopjournal.com"
+}
 variable "certificate_arn" {
   description = "The ACM certificate ARN for HTTPS"
   type        = string
-  default     = "arn:aws:acm:us-east-1:671958020402:certificate/3e254b04-1362-4b2e-a5a2-72f8e8a8b85e"
+  default     = "arn:aws:acm:us-west-1:671958020402:certificate/1571bdf4-b591-4f2a-bddf-863ec6d0da87"
 }
 variable "s3_bucket" {
   description = "The S3 bucket name for API data storage"

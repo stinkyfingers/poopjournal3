@@ -35,13 +35,13 @@ func (h *PoopHandler) ListPoopHandler(w http.ResponseWriter, r *http.Request) {
 
 	poops, err := h.storage.ListPoop(r.Context(), userId)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get poop entries")
+		writeError(w, http.StatusInternalServerError, "failed to get poop entries: "+err.Error())
 		return
 	}
 
 	existingTags, err := h.storage.GetAllPoopTags(r.Context(), userId)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get existing tags")
+		writeError(w, http.StatusInternalServerError, "failed to get existing tags: "+err.Error())
 		return
 	}
 
@@ -86,7 +86,7 @@ func (h *PoopHandler) AddPoopHandler(w http.ResponseWriter, r *http.Request) {
 	poop.Tags = normalizeTags(poop.Tags)
 
 	if err := h.storage.SavePoop(r.Context(), &poop); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save poop entry")
+		writeError(w, http.StatusInternalServerError, "failed to save poop entry: "+err.Error())
 		return
 	}
 
@@ -135,7 +135,7 @@ func (h *PoopHandler) UpdatePoopHandler(w http.ResponseWriter, r *http.Request) 
 	poop.Tags = normalizeTags(poop.Tags)
 
 	if err := h.storage.UpdatePoop(r.Context(), &poop); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update poop entry")
+		writeError(w, http.StatusInternalServerError, "failed to update poop entry: "+err.Error())
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *PoopHandler) DeletePoopHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.storage.DeletePoop(r.Context(), userId, poopID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete poop entry")
+		writeError(w, http.StatusInternalServerError, "failed to delete poop entry: "+err.Error())
 		return
 	}
 

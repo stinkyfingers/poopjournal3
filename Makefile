@@ -2,6 +2,11 @@
 BINARY_NAME=poopjournal
 LAMBDA_BINARY=bootstrap
 GO_FILES=$(shell find . -name "*.go" | grep -v vendor/)
+AWS_PROFILE ?= jds
+AWS_REGION ?= us-west-1
+ECR_REPO ?= poopjournal
+IMAGE_TAG ?= latest
+PKGNAME ?= poopjournal-api
 
 # Environment variables for local development
 export AUTH0_DOMAIN ?= dev-domain.auth0.com
@@ -75,6 +80,18 @@ check: fmt vet lint test ## Run all checks (format, vet, lint, test)
 docker-build: ## Build Docker image
 	docker build -t $(BINARY_NAME):latest .
 
+.PHONY: docker
+docker: docker-build ## Build Docker image (alias)
+
+.PHONY: docker-push
+docker-push: docker-build ## Push Docker image to ECR
+	@ACCOUNT_ID=$$(aws sts get-caller-identity --profile $(AWS_PROFILE) --query Account --output text); \
+	ECR_URI="$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO)"; \
+	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) | docker login --username AWS --password-stdin "$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com"; \
+	docker tag $(BINARY_NAME):latest "$$ECR_URI:$(IMAGE_TAG)"; \
+	docker push "$$ECR_URI:$(IMAGE_TAG)"; \
+	echo "Pushed $$ECR_URI:$(IMAGE_TAG)"
+
 .PHONY: docker-run
 docker-run: docker-build ## Run Docker container
 	docker run -p 8080:8080 \
@@ -82,9 +99,8 @@ docker-run: docker-build ## Run Docker container
 		-e AUTH0_CLIENT_ID=$(AUTH0_CLIENT_ID) \
 		-e AUTH0_CLIENT_SECRET=$(AUTH0_CLIENT_SECRET) \
 		-e AUTH0_REDIRECT_URL=http://localhost:8080/callback \
-		-e STORAGE_TYPE=local \
-		-e DATA_DIR=/app/data \
-		-v $(PWD)/data:/app/data \
+		-e STORAGE_TYPE=s3 \
+		-e S3_BUCKET=poopjournal-data-prod \
 		$(BINARY_NAME):latest
 
 # Terraform targets
@@ -223,3 +239,14 @@ all: clean deps check build build-lambda ## Build everything
 
 .PHONY: quick
 quick: build ## Quick build for development
+
+# refresh ECS services after deployment
+ecs-force-deploy:
+	aws ecs update-service \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		--cluster $(PKGNAME) \
+		--service $(PKGNAME) \
+		--force-new-deployment
+
+.PHONY: ecs-force-deploy

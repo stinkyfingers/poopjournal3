@@ -102,7 +102,7 @@ resource "aws_lb_target_group" "api_tg" {
   vpc_id   = module.vpc.vpc_id
   target_type = "ip"
   health_check {
-    path                = "/"
+    path                = "/status"
     matcher             = "200-399"
     interval            = 30
     timeout             = 5
@@ -121,6 +121,11 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api_tg.arn
   }
+}
+
+resource "aws_cloudwatch_log_group" "ecs_api" {
+  name              = "/ecs/poopjournal-api"
+  retention_in_days = 14
 }
 
 # Security Groups
@@ -181,12 +186,11 @@ resource "aws_ecs_service" "api" {
   name            = "poopjournal-api"
   cluster         = aws_ecs_cluster.api.id
   task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = 0
-  launch_type     = "FARGATE"
+  desired_count   = 1
   network_configuration {
-    subnets          = module.vpc.private_subnets
+    subnets          = module.vpc.public_subnets
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
   load_balancer {
     target_group_arn = aws_lb_target_group.api_tg.arn
@@ -198,24 +202,21 @@ resource "aws_ecs_service" "api" {
     weight            = 1
     base              = 0
   }
-  lifecycle {
-    ignore_changes = [desired_count]
+  depends_on = [aws_cloudwatch_log_group.ecs_api]
+}
+
+resource "aws_route53_record" "api" {
+  zone_id = data.aws_route53_zone.selected.zone_id
+  name    = var.domain_name
+  type    = "A"
+  alias {
+    name                   = aws_lb.api_alb.dns_name
+    zone_id                = aws_lb.api_alb.zone_id
+    evaluate_target_health = true
   }
 }
 
-# # Route53 Record
-# resource "aws_route53_record" "api" {
-#   zone_id = data.aws_route53_zone.selected.zone_id
-#   name    = var.domain_name
-#   type    = "A"
-#   alias {
-#     name                   = aws_lb.api_alb.dns_name
-#     zone_id                = aws_lb.api_alb.zone_id
-#     evaluate_target_health = true
-#   }
-# }
-
-# data "aws_route53_zone" "selected" {
-#   name         = var.domain_name
-#   private_zone = false
-# }
+data "aws_route53_zone" "selected" {
+  name         = var.hosted_zone_name
+  private_zone = false
+}

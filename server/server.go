@@ -38,6 +38,11 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("PUT /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.UpdatePoopHandler)))
 	mux.HandleFunc("DELETE /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.DeletePoopHandler)))
 
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	return mux
 }
 
