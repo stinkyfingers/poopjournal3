@@ -112,15 +112,7 @@ func (l *LocalStorage) ListFood(ctx context.Context, userID string) ([]*models.F
 
 		// Handle tags for new format
 		var tags []string
-		timestampIndex := 4
-
-		if len(record) >= 7 {
-			// New format: id, user_email, name, description, tags, timestamp
-			if record[4] != "" {
-				tags = strings.Split(record[4], ";")
-			}
-			timestampIndex = 5
-		}
+		timestampIndex := 5
 
 		timestamp, _ := time.Parse(time.RFC3339, record[timestampIndex])
 
@@ -310,18 +302,8 @@ func (l *LocalStorage) ListPoop(ctx context.Context, userID string) ([]*models.P
 		// Handle urgency and tags for new format
 		urgency := 5 // default
 		var tags []string
-		notesIndex := 3
-		timestampIndex := 4
-
-		if len(record) >= 8 {
-			// New format: id, user_email, bristol_scale, urgency, tags, notes, timestamp
-			urgency, _ = strconv.Atoi(record[3])
-			if record[4] != "" {
-				tags = strings.Split(record[4], ";")
-			}
-			notesIndex = 5
-			timestampIndex = 6
-		}
+		notesIndex := 5
+		timestampIndex := 6
 
 		timestamp, _ := time.Parse(time.RFC3339, record[timestampIndex])
 

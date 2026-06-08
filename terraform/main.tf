@@ -35,7 +35,7 @@ resource "aws_ecs_cluster" "api" {
   name = "poopjournal-api"
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled"
   }
 }
 
