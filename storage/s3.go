@@ -3,14 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -47,7 +45,7 @@ func (s *S3Storage) getUserKey(userID, fileName string) string {
 }
 
 func (s *S3Storage) SaveFood(ctx context.Context, food *models.Food) error {
-	key := s.getUserKey(food.UserID, "food.csv")
+	key := s.getUserKey(food.UserID, "food.json")
 
 	// Get existing foods
 	foods, err := s.ListFood(ctx, food.UserID)
@@ -63,7 +61,7 @@ func (s *S3Storage) SaveFood(ctx context.Context, food *models.Food) error {
 }
 
 func (s *S3Storage) ListFood(ctx context.Context, userID string) ([]*models.Food, error) {
-	key := s.getUserKey(userID, "food.csv")
+	key := s.getUserKey(userID, "food.json")
 
 	// Try to get the file from S3
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
@@ -80,42 +78,21 @@ func (s *S3Storage) ListFood(ctx context.Context, userID string) ([]*models.Food
 	}
 	defer result.Body.Close()
 
-	// Read and parse CSV
-	reader := csv.NewReader(result.Body)
-	records, err := reader.ReadAll()
+	var userFoods []*models.Food
+	err = json.NewDecoder(result.Body).Decode(&userFoods)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CSV: %w", err)
-	}
-
-	if len(records) < 2 { // Header + at least one record
-		return []*models.Food{}, nil
-	}
-
-	foods := make([]*models.Food, 0, len(records)-1)
-	for _, record := range records[1:] { // Skip header
-		if len(record) != 5 {
-			log.Printf("expected 5 fields in food.csv record, found %d in record %+v", len(record), record)
-			continue
+		if err == io.EOF {
+			return []*models.Food{}, nil
 		}
-
-		timestamp, _ := time.Parse(time.RFC3339, record[4])
-
-		food := &models.Food{
-			ID:          record[0],
-			UserID:      record[1],
-			Name:        record[2],
-			Description: record[3],
-			Timestamp:   timestamp,
-		}
-		foods = append(foods, food)
+		return nil, fmt.Errorf("failed to decode food JSON: %w", err)
 	}
 
 	// Sort by timestamp descending (newest first)
-	sort.Slice(foods, func(i, j int) bool {
-		return foods[i].Timestamp.After(foods[j].Timestamp)
+	sort.Slice(userFoods, func(i, j int) bool {
+		return userFoods[i].Timestamp.After(userFoods[j].Timestamp)
 	})
 
-	return foods, nil
+	return userFoods, nil
 }
 
 func (s *S3Storage) UpdateFood(ctx context.Context, food *models.Food) error {
@@ -138,7 +115,7 @@ func (s *S3Storage) UpdateFood(ctx context.Context, food *models.Food) error {
 		return fmt.Errorf("food item not found")
 	}
 
-	key := s.getUserKey(food.UserID, "food.csv")
+	key := s.getUserKey(food.UserID, "food.json")
 	return s.writeFoodFile(ctx, key, foods)
 }
 
@@ -156,52 +133,30 @@ func (s *S3Storage) DeleteFood(ctx context.Context, userID, foodID string) error
 		}
 	}
 
-	key := s.getUserKey(userID, "food.csv")
+	key := s.getUserKey(userID, "food.json")
 	return s.writeFoodFile(ctx, key, filteredFoods)
 }
 
 func (s *S3Storage) writeFoodFile(ctx context.Context, key string, foods []*models.Food) error {
 	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-
-	// Write header
-	header := []string{"id", "user_id", "name", "description", "timestamp"}
-	if err := writer.Write(header); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
-	}
-
-	// Write records
-	for _, food := range foods {
-		record := []string{
-			food.ID,
-			food.UserID,
-			food.Name,
-			food.Description,
-			food.Timestamp.Format(time.RFC3339),
-		}
-		if err := writer.Write(record); err != nil {
-			return fmt.Errorf("failed to write food record: %w", err)
-		}
-	}
-
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		return fmt.Errorf("failed to flush CSV writer: %w", err)
+	err := json.NewEncoder(&buf).Encode(foods)
+	if err != nil {
+		return fmt.Errorf("failed to encode foods to JSON: %w", err)
 	}
 
 	// Upload to S3
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucketName),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(buf.Bytes()),
-		ContentType: aws.String("text/csv"),
+		ContentType: aws.String("application/json"),
 	})
 
 	return err
 }
 
 func (s *S3Storage) SavePoop(ctx context.Context, poop *models.Poop) error {
-	key := s.getUserKey(poop.UserID, "poop.csv")
+	key := s.getUserKey(poop.UserID, "poop.json")
 
 	// Get existing poops
 	poops, err := s.ListPoop(ctx, poop.UserID)
@@ -217,7 +172,7 @@ func (s *S3Storage) SavePoop(ctx context.Context, poop *models.Poop) error {
 }
 
 func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop, error) {
-	key := s.getUserKey(userID, "poop.csv")
+	key := s.getUserKey(userID, "poop.json")
 
 	// Try to get the file from S3
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
@@ -233,43 +188,22 @@ func (s *S3Storage) ListPoop(ctx context.Context, userID string) ([]*models.Poop
 		return nil, fmt.Errorf("failed to get poop file from S3: %w", err)
 	}
 	defer result.Body.Close()
-	// Read and parse CSV
-	reader := csv.NewReader(result.Body)
-	records, err := reader.ReadAll()
+
+	var userPoops []*models.Poop
+	err = json.NewDecoder(result.Body).Decode(&userPoops)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CSV: %w", err)
-	}
-
-	if len(records) < 2 { // Header + at least one record
-		return []*models.Poop{}, nil
-	}
-
-	poops := make([]*models.Poop, 0, len(records)-1)
-	for _, record := range records[1:] { // Skip header
-		if len(record) != 5 {
-			log.Printf("expected 5 fields in poop.csv record, found %d in record %+v", len(record), record)
-			continue
+		if err == io.EOF {
+			return []*models.Poop{}, nil
 		}
-
-		bristolScale, _ := strconv.Atoi(record[2])
-		timestamp, _ := time.Parse(time.RFC3339, record[4])
-
-		poop := &models.Poop{
-			ID:           record[0],
-			UserID:       record[1],
-			BristolScale: bristolScale,
-			Notes:        record[3],
-			Timestamp:    timestamp,
-		}
-		poops = append(poops, poop)
+		return nil, fmt.Errorf("failed to decode poop JSON: %w", err)
 	}
 
 	// Sort by timestamp descending (newest first)
-	sort.Slice(poops, func(i, j int) bool {
-		return poops[i].Timestamp.After(poops[j].Timestamp)
+	sort.Slice(userPoops, func(i, j int) bool {
+		return userPoops[i].Timestamp.After(userPoops[j].Timestamp)
 	})
 
-	return poops, nil
+	return userPoops, nil
 }
 
 func (s *S3Storage) UpdatePoop(ctx context.Context, poop *models.Poop) error {
@@ -292,7 +226,7 @@ func (s *S3Storage) UpdatePoop(ctx context.Context, poop *models.Poop) error {
 		return fmt.Errorf("poop item not found")
 	}
 
-	key := s.getUserKey(poop.UserID, "poop.csv")
+	key := s.getUserKey(poop.UserID, "poop.json")
 	return s.writePoopFile(ctx, key, poops)
 }
 
@@ -310,45 +244,23 @@ func (s *S3Storage) DeletePoop(ctx context.Context, userID, poopID string) error
 		}
 	}
 
-	key := s.getUserKey(userID, "poop.csv")
+	key := s.getUserKey(userID, "poop.json")
 	return s.writePoopFile(ctx, key, filteredPoops)
 }
 
 func (s *S3Storage) writePoopFile(ctx context.Context, key string, poops []*models.Poop) error {
 	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-
-	// Write header
-	header := []string{"id", "user_id", "bristol_scale", "notes", "timestamp"}
-	if err := writer.Write(header); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
-	}
-
-	// Write records
-	for _, poop := range poops {
-		record := []string{
-			poop.ID,
-			poop.UserID,
-			strconv.Itoa(poop.BristolScale),
-			poop.Notes,
-			poop.Timestamp.Format(time.RFC3339),
-		}
-		if err := writer.Write(record); err != nil {
-			return fmt.Errorf("failed to write poop record: %w", err)
-		}
-	}
-
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		return fmt.Errorf("failed to flush CSV writer: %w", err)
+	err := json.NewEncoder(&buf).Encode(poops)
+	if err != nil {
+		return fmt.Errorf("failed to encode poops to JSON: %w", err)
 	}
 
 	// Upload to S3
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucketName),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(buf.Bytes()),
-		ContentType: aws.String("text/csv"),
+		ContentType: aws.String("application/json"),
 	})
 
 	return err
