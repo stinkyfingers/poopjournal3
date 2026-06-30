@@ -3,59 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"sort"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/stinkyfingers/poopjournal/auth"
 	"github.com/stinkyfingers/poopjournal/models"
-	"github.com/stinkyfingers/poopjournal/storage"
 )
 
-type FoodHandler struct {
-	storage storage.Storage
-}
-
-func NewFoodHandler(storage storage.Storage) *FoodHandler {
-	return &FoodHandler{
-		storage: storage,
-	}
-}
-
-type foodPageResponse struct {
-	Foods        []*models.Food `json:"foods"`
-	ExistingTags []string       `json:"existing_tags"`
-}
-
-type deleteResponse struct {
-	Deleted bool   `json:"deleted"`
-	ID      string `json:"id"`
-}
-
-func (h *FoodHandler) ListFoodHandler(w http.ResponseWriter, r *http.Request) {
-	userId, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "user not found in context")
-		return
-	}
-
-	foods, err := h.storage.ListFood(r.Context(), userId)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get food entries: "+err.Error())
-		return
-	}
-
-	existingTags, err := h.storage.GetAllFoodTags(r.Context(), userId)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get existing tags: "+err.Error())
-		return
-	}
-
-	sort.Strings(existingTags)
-	writeJSON(w, http.StatusOK, foodPageResponse{Foods: foods, ExistingTags: existingTags})
-}
-
-func (h *FoodHandler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -67,7 +21,7 @@ func (h *FoodHandler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var food *models.Food
+	var food models.Food
 	err := json.NewDecoder(r.Body).Decode(&food)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to decode JSON body: "+err.Error())
@@ -83,18 +37,22 @@ func (h *FoodHandler) AddFoodHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "date and time is required")
 		return
 	}
-	food.ID = uuid.New().String()
-	food.UserID = userId
-	food.Tags = normalizeTags(food.Tags)
-	if err := h.storage.SaveFood(r.Context(), food); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to add food entry: "+err.Error())
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	userData.Foods = append(userData.Foods, food)
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save food entry: "+err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, food)
 }
 
-func (h *FoodHandler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -106,7 +64,7 @@ func (h *FoodHandler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var food *models.Food
+	var food models.Food
 	err := json.NewDecoder(r.Body).Decode(&food)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to decode JSON body: "+err.Error())
@@ -128,15 +86,26 @@ func (h *FoodHandler) UpdateFoodHandler(w http.ResponseWriter, r *http.Request) 
 	food.UserID = userId
 	food.Tags = normalizeTags(food.Tags)
 
-	if err := h.storage.UpdateFood(r.Context(), food); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update food entry: "+err.Error())
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i, userFood := range userData.Foods {
+		if food.ID == userFood.ID {
+			userData.Foods[i] = food
+		}
+	}
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save food entry: "+err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, food)
 }
 
-func (h *FoodHandler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -154,8 +123,19 @@ func (h *FoodHandler) DeleteFoodHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.storage.DeleteFood(r.Context(), userId, foodID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete food entry: "+err.Error())
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i, userFood := range userData.Foods {
+		if foodID == userFood.ID {
+			userData.Foods = append(userData.Foods[:i], userData.Foods[i+1:]...)
+		}
+	}
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save food entry: "+err.Error())
 		return
 	}
 

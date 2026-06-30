@@ -25,18 +25,17 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	}
 	mux := http.NewServeMux()
 
-	foodHandler := handlers.NewFoodHandler(s.storage)
-	poopHandler := handlers.NewPoopHandler(s.storage)
+	handler := handlers.NewHandler(s.storage)
 
-	mux.HandleFunc("GET /food", auth.JWTMiddleware(http.HandlerFunc(foodHandler.ListFoodHandler)))
-	mux.HandleFunc("POST /food", auth.JWTMiddleware(http.HandlerFunc(foodHandler.AddFoodHandler)))
-	mux.HandleFunc("PUT /food", auth.JWTMiddleware(http.HandlerFunc(foodHandler.UpdateFoodHandler)))
-	mux.HandleFunc("DELETE /food", auth.JWTMiddleware(http.HandlerFunc(foodHandler.DeleteFoodHandler)))
+	mux.HandleFunc("GET /userdata", auth.JWTMiddleware(http.HandlerFunc(handler.GetUserDataHandler)))
 
-	mux.HandleFunc("GET /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.ListPoopHandler)))
-	mux.HandleFunc("POST /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.AddPoopHandler)))
-	mux.HandleFunc("PUT /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.UpdatePoopHandler)))
-	mux.HandleFunc("DELETE /poop", auth.JWTMiddleware(http.HandlerFunc(poopHandler.DeletePoopHandler)))
+	mux.HandleFunc("POST /food", auth.JWTMiddleware(http.HandlerFunc(handler.AddFoodHandler)))
+	mux.HandleFunc("PUT /food", auth.JWTMiddleware(http.HandlerFunc(handler.UpdateFoodHandler)))
+	mux.HandleFunc("DELETE /food", auth.JWTMiddleware(http.HandlerFunc(handler.DeleteFoodHandler)))
+
+	mux.HandleFunc("POST /poop", auth.JWTMiddleware(http.HandlerFunc(handler.AddPoopHandler)))
+	mux.HandleFunc("PUT /poop", auth.JWTMiddleware(http.HandlerFunc(handler.UpdatePoopHandler)))
+	mux.HandleFunc("DELETE /poop", auth.JWTMiddleware(http.HandlerFunc(handler.DeletePoopHandler)))
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

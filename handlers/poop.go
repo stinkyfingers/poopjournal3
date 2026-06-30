@@ -3,53 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"sort"
 
 	"github.com/google/uuid"
 	"github.com/stinkyfingers/poopjournal/auth"
 	"github.com/stinkyfingers/poopjournal/models"
-	"github.com/stinkyfingers/poopjournal/storage"
 )
 
-type PoopHandler struct {
-	storage storage.Storage
-}
-
-func NewPoopHandler(storage storage.Storage) *PoopHandler {
-	return &PoopHandler{
-		storage: storage,
-	}
-}
-
-type poopPageResponse struct {
-	Poops        []*models.Poop `json:"poops"`
-	ExistingTags []string       `json:"existing_tags"`
-}
-
-func (h *PoopHandler) ListPoopHandler(w http.ResponseWriter, r *http.Request) {
-	userId, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "user not found in context")
-		return
-	}
-
-	poops, err := h.storage.ListPoop(r.Context(), userId)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get poop entries: "+err.Error())
-		return
-	}
-
-	existingTags, err := h.storage.GetAllPoopTags(r.Context(), userId)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get existing tags: "+err.Error())
-		return
-	}
-
-	sort.Strings(existingTags)
-	writeJSON(w, http.StatusOK, poopPageResponse{Poops: poops, ExistingTags: existingTags})
-}
-
-func (h *PoopHandler) AddPoopHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AddPoopHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -85,7 +45,14 @@ func (h *PoopHandler) AddPoopHandler(w http.ResponseWriter, r *http.Request) {
 	poop.UserID = userId
 	poop.Tags = normalizeTags(poop.Tags)
 
-	if err := h.storage.SavePoop(r.Context(), &poop); err != nil {
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	userData.Poops = append(userData.Poops, poop)
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save poop entry: "+err.Error())
 		return
 	}
@@ -93,7 +60,7 @@ func (h *PoopHandler) AddPoopHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, poop)
 }
 
-func (h *PoopHandler) UpdatePoopHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdatePoopHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -134,15 +101,26 @@ func (h *PoopHandler) UpdatePoopHandler(w http.ResponseWriter, r *http.Request) 
 	poop.UserID = userId
 	poop.Tags = normalizeTags(poop.Tags)
 
-	if err := h.storage.UpdatePoop(r.Context(), &poop); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update poop entry: "+err.Error())
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i, userPoop := range userData.Poops {
+		if poop.ID == userPoop.ID {
+			userData.Poops[i] = poop
+		}
+	}
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save poop entry: "+err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, poop)
 }
 
-func (h *PoopHandler) DeletePoopHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeletePoopHandler(w http.ResponseWriter, r *http.Request) {
 	userId, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "user not found in context")
@@ -160,8 +138,19 @@ func (h *PoopHandler) DeletePoopHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.storage.DeletePoop(r.Context(), userId, poopID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete poop entry: "+err.Error())
+	userData, err := h.storage.GetUserData(r.Context(), userId)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i, userPoop := range userData.Poops {
+		if poopID == userPoop.ID {
+			userData.Poops = append(userData.Poops[:i], userData.Poops[i+1:]...)
+		}
+	}
+
+	if err := h.storage.SaveUserData(r.Context(), userId, userData); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save poop entry: "+err.Error())
 		return
 	}
 

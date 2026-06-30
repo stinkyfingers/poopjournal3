@@ -3,7 +3,24 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/stinkyfingers/poopjournal/storage"
 )
+
+type Handler struct {
+	storage storage.Storage
+}
+
+func NewHandler(storage storage.Storage) *Handler {
+	return &Handler{
+		storage: storage,
+	}
+}
+
+type deleteResponse struct {
+	Deleted bool   `json:"deleted"`
+	ID      string `json:"id"`
+}
 
 type errorResponse struct {
 	Error string `json:"error"`
